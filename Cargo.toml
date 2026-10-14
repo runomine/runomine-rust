@@ -1,0 +1,92 @@
+[package]
+name = "runomine"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+description = "Cookieless analytics that counts money, not just visits: pageviews and business events sent from your Rust backend to runomine."
+license = "MIT"
+repository = "https://github.com/runomine/runomine-rust"
+homepage = "https://runomine.com"
+readme = "README.md"
+keywords = ["analytics", "cookieless", "privacy", "axum", "actix-web"]
+categories = ["web-programming", "api-bindings"]
+
+[features]
+default = ["tokio", "rustls"]
+# Async `Client` on tokio, sending with reqwest.
+tokio = ["dep:tokio", "dep:reqwest"]
+# `runomine::blocking::Client`: a std thread sending with ureq. No async runtime needed.
+blocking = ["dep:ureq"]
+# TLS for whichever sender is enabled (`tokio` and/or `blocking`).
+rustls = ["reqwest?/rustls", "ureq?/rustls"]
+native-tls = ["reqwest?/native-tls", "ureq?/native-tls"]
+# Generic tower `Layer` for any tower/hyper stack, plus the `Rom` handle.
+tower = ["tokio", "dep:http", "dep:tower-layer", "dep:tower-service", "dep:pin-project-lite"]
+# axum 0.8: the layer also reads `ConnectInfo`, and `Rom` is an extractor.
+axum = ["tower", "dep:axum"]
+# actix-web 4: middleware (`App::wrap`) and the `Rom` extractor.
+actix-web = ["tokio", "dep:actix-web"]
+
+[dependencies]
+serde = { version = "1.0.190", features = ["derive"] }
+serde_json = "1.0.100"
+sha2 = { version = ">=0.10.8, <0.12", default-features = false }
+uuid = { version = "1.10", default-features = false, features = ["std", "v7"] }
+
+tokio = { version = "1.38", default-features = false, features = ["rt", "sync", "time"], optional = true }
+reqwest = { version = "0.13", default-features = false, optional = true }
+ureq = { version = "3", default-features = false, optional = true }
+
+http = { version = "1", optional = true }
+tower-layer = { version = "0.3", optional = true }
+tower-service = { version = "0.3", optional = true }
+pin-project-lite = { version = "0.2", optional = true }
+axum = { version = "0.8", default-features = false, features = ["tokio"], optional = true }
+actix-web = { version = "4", default-features = false, optional = true }
+
+[dev-dependencies]
+tokio = { version = "1.38", features = ["macros", "rt-multi-thread", "net", "signal", "time", "sync"] }
+axum = { version = "0.8", features = ["macros"] }
+actix-web = { version = "4", features = ["macros"] }
+reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
+tower = { version = "0.5", features = ["util"] }
+http = "1"
+
+[package.metadata.docs.rs]
+all-features = true
+
+[[example]]
+name = "axum"
+required-features = ["axum"]
+
+[[example]]
+name = "actix"
+required-features = ["actix-web"]
+
+[[example]]
+name = "plain_tokio"
+required-features = ["tokio"]
+
+[[example]]
+name = "blocking"
+required-features = ["blocking"]
+
+[[example]]
+name = "fake_collector"
+required-features = ["tokio"]
+
+[[test]]
+name = "client"
+required-features = ["tokio"]
+
+[[test]]
+name = "blocking"
+required-features = ["blocking"]
+
+[[test]]
+name = "axum"
+required-features = ["axum"]
+
+[[test]]
+name = "actix"
+required-features = ["actix-web"]
