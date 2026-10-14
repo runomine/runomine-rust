@@ -21,6 +21,7 @@ async fn page() -> Html<&'static str> {
 
 async fn signup(rom: Rom) -> Html<&'static str> {
     rom.identify("u_42");
+    rom.page_prop("section", "account");
     rom.track("signup", Track::new().prop("plan", "free"));
     Html("<p>welcome</p>")
 }
@@ -230,6 +231,18 @@ async fn rom_attaches_the_request_and_the_identified_user() {
     assert_eq!(
         welcome[0]["user"], "u_42",
         "Rom::identify reaches the pageview"
+    );
+    assert_eq!(
+        welcome[0]["props"],
+        json!({"section": "account"}),
+        "Rom::page_prop reaches the pageview"
+    );
+    assert!(
+        events
+            .iter()
+            .filter(|e| e["type"] == "pageview" && e["user"] != "u_42")
+            .all(|e| e.get("props").is_none()),
+        "other pages have no props"
     );
 }
 

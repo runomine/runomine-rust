@@ -9,6 +9,9 @@ in the background. Your app is never blocked, and runomine never causes an error
 - Async on tokio by default, or a `blocking` client (std thread + ureq) with no async runtime.
 - Rust 1.85+ (edition 2024).
 
+**Unreleased** (on `main`, not on crates.io yet; see [CHANGELOG.md](CHANGELOG.md)): page view props
+(`PageView::prop`, `rom.page_prop`). Install from git to use them.
+
 ## Install
 
 From crates.io:
@@ -97,6 +100,11 @@ async fn signup(rom: Rom, Form(form): Form<SignupForm>) -> impl IntoResponse {
     // …
 }
 ```
+
+Page views take props too (unreleased), stored as the page view's dims: each key becomes a breakdown and a filter in
+runomine (`area` feeds the Areas breakdown). Same rules as events: flat, up to 20 keys, string or number values. In a
+handler, `rom.page_prop("section", "news")` adds one to this request's pageview; on a `PageView` you build yourself,
+`.prop(key, value)` / `.props(…)` or the `props` field.
 
 A full example is in [`examples/axum.rs`](examples/axum.rs).
 
@@ -339,7 +347,7 @@ let rom = runomine::Client::new(runomine::Config { debug: true, ..runomine::Conf
 | | |
 |---|---|
 | `Client::new(Config)` / `from_env()` / `disabled()` | A client. Cheap to clone. |
-| `client.pageview(PageView { url, ip, user_agent, referrer, country, host, user, visitor, ts })` | Record a pageview. |
+| `client.pageview(PageView { url, ip, user_agent, referrer, country, host, user, visitor, ts, props })` | Record a pageview. `PageView` also has `.prop(k, v)` / `.props(…)` (unreleased). |
 | `client.track(name, Track)` | Record an event. `Track::new().prop(k, v).props(…).revenue(amount, currency).user(id).visitor(v).url(u).ts(t).request(RequestInfo)` |
 | `client.visitor(ip, user_agent, host)` | Today's visitor hash for this site. |
 | `client.checkout_metadata(&RequestInfo)` | `runomine_visitor` / `runomine_user` for your payment provider's checkout. |
@@ -347,7 +355,7 @@ let rom = runomine::Client::new(runomine::Config { debug: true, ..runomine::Conf
 | `runomine::client()` / `runomine::init(client)` | The process-wide client. |
 | `RunomineLayer::new(client)` | tower/axum layer: `.skip(…)`, `.client_ip(…)`, `.trust_forwarded_host(…)`, `.user(…)`. |
 | `actix::Runomine::new(client)` | actix-web middleware, same options. |
-| `Rom` | Extractor (axum, actix-web): `track`, `visitor`, `checkout_metadata`, `identify`, `request`, `client`. |
+| `Rom` | Extractor (axum, actix-web): `track`, `visitor`, `checkout_metadata`, `identify`, `page_prop` (unreleased), `request`, `client`. |
 | `tower::rom_for(&parts)` / `axum::visitor_for(&parts)` / `actix::visitor_for(&req)` | The `Rom` or visitor of a request, outside an extractor. |
 | `visitor_hash(token, ip, user_agent, host, day)` / `today()` | The raw hash. |
 | `web::*` | Pageview rules and request parsing for other frameworks. |

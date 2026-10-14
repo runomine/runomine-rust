@@ -5,7 +5,7 @@ use std::fmt;
 use std::sync::{Arc, Mutex};
 
 use crate::client::Client;
-use crate::event::{PageView, RequestInfo, Track};
+use crate::event::{PageView, Prop, RequestInfo, Track};
 use crate::hash::today;
 
 /// What the middleware stores in the request's extensions.
@@ -19,6 +19,8 @@ pub(crate) struct RomContext {
     pub info: RequestInfo,
     /// Set with [`Rom::identify`]; read by the middleware for the pageview.
     pub user: Mutex<Option<String>>,
+    /// Set with [`Rom::page_prop`]; sent with the middleware's pageview.
+    pub props: Mutex<BTreeMap<String, Prop>>,
 }
 
 impl RomContext {
@@ -26,6 +28,7 @@ impl RomContext {
         RomContext {
             info,
             user: Mutex::new(None),
+            props: Mutex::new(BTreeMap::new()),
         }
     }
 
@@ -38,6 +41,7 @@ impl RomContext {
     pub fn record_pageview(&self, client: &Client) {
         let mut pageview = PageView::from(self.info.clone());
         pageview.user = self.user();
+        pageview.props = std::mem::take(&mut *self.props.lock().unwrap_or_else(|e| e.into_inner()));
         client.pageview(pageview);
     }
 }
@@ -123,6 +127,16 @@ impl Rom {
         if !user.is_empty() {
             *self.ctx.user.lock().unwrap_or_else(|e| e.into_inner()) = Some(user);
         }
+    }
+
+    /// A property of this request's pageview, sent by the middleware after the response (stored as the page view's
+    /// dims): `rom.page_prop("section", "news")`. Flat, up to 20 keys, string or number values.
+    pub fn page_prop(&self, key: impl Into<String>, value: impl Into<Prop>) {
+        self.ctx
+            .props
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(key.into(), value.into());
     }
 
     /// What was taken from the request (the IP included: it stays on your server).

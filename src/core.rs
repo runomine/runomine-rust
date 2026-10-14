@@ -119,7 +119,7 @@ impl Core {
             country: non_empty(pv.country),
             user: non_empty(pv.user),
             revenue: None,
-            props: None,
+            props: (!pv.props.is_empty()).then_some(pv.props),
         })
     }
 
@@ -331,6 +331,30 @@ mod tests {
             serde_json::json!({"plan": "rent", "film": "the-third-man", "seats": 2})
         );
         assert!(json.get("referrer").is_none());
+    }
+
+    #[test]
+    fn pageview_props_are_sent_like_event_props() {
+        let page = || PageView {
+            url: "https://example.com/news".into(),
+            ip: Some("203.0.113.9".into()),
+            user_agent: Some(UA.into()),
+            ..Default::default()
+        };
+        let event = core()
+            .pageview(
+                page()
+                    .prop("section", "news")
+                    .props([("team", 7), ("seats", 2)]),
+            )
+            .unwrap();
+        let json = serde_json::to_value(&event).unwrap();
+        assert_eq!(
+            json["props"],
+            serde_json::json!({"section": "news", "team": 7, "seats": 2})
+        );
+        let json = serde_json::to_value(core().pageview(page()).unwrap()).unwrap();
+        assert!(json.get("props").is_none());
     }
 
     #[test]

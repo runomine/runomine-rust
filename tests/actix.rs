@@ -16,6 +16,7 @@ async fn page() -> HttpResponse {
 
 async fn signup(rom: Rom) -> HttpResponse {
     rom.identify(42);
+    rom.page_prop("section", "account");
     rom.track("signup", Track::new().prop("plan", "free"));
     HttpResponse::Ok()
         .content_type("text/html")
@@ -121,6 +122,12 @@ async fn records_html_pageviews_and_events_with_the_visitor() {
         pageviews[1]["user"], "42",
         "Rom::identify reaches the pageview"
     );
+    assert_eq!(
+        pageviews[1]["props"],
+        serde_json::json!({"section": "account"}),
+        "Rom::page_prop reaches the pageview"
+    );
+    assert!(pageviews[0].get("props").is_none());
     let signups: Vec<&Value> = events.iter().filter(|e| e["name"] == "signup").collect();
     assert_eq!(signups.len(), 2);
     assert_eq!(signups[0]["visitor"], expected.as_str());

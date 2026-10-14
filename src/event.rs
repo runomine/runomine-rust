@@ -27,7 +27,7 @@ pub struct RequestInfo {
 }
 
 /// A pageview. Only `url` is required; the visitor hash is computed from `ip`, `user_agent` and `host` (or the
-/// URL's host) unless you pass `visitor`.
+/// URL's host) unless you pass `visitor`. Props, like an event's, are stored as the page view's dims.
 ///
 /// ```
 /// let pageview = runomine::PageView {
@@ -36,7 +36,8 @@ pub struct RequestInfo {
 ///     user_agent: Some("Mozilla/5.0 …".into()),
 ///     referrer: Some("https://www.google.com/".into()),
 ///     ..Default::default()
-/// };
+/// }
+/// .prop("section", "pricing");
 /// # #[cfg(feature = "tokio")]
 /// runomine::Client::from_env().pageview(pageview);
 /// ```
@@ -53,6 +54,28 @@ pub struct PageView {
     pub visitor: Option<String>,
     /// Event time. Default: now.
     pub ts: Option<SystemTime>,
+    /// Flat, up to 20 keys, string or number values (as [`Track::prop`]). Stored as the page view's dims: each key
+    /// becomes a breakdown and a filter in runomine (`area` feeds the Areas breakdown).
+    pub props: BTreeMap<String, Prop>,
+}
+
+impl PageView {
+    /// A property of this page view (see [`PageView::props`](PageView#structfield.props)).
+    pub fn prop(mut self, key: impl Into<String>, value: impl Into<Prop>) -> Self {
+        self.props.insert(key.into(), value.into());
+        self
+    }
+
+    /// Several properties at once.
+    pub fn props<K: Into<String>, V: Into<Prop>>(
+        mut self,
+        props: impl IntoIterator<Item = (K, V)>,
+    ) -> Self {
+        for (k, v) in props {
+            self.props.insert(k.into(), v.into());
+        }
+        self
+    }
 }
 
 impl From<RequestInfo> for PageView {
@@ -67,6 +90,7 @@ impl From<RequestInfo> for PageView {
             user: info.user,
             visitor: None,
             ts: None,
+            props: BTreeMap::new(),
         }
     }
 }
