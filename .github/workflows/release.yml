@@ -1,0 +1,112 @@
+# Publishes the runomine crate to crates.io when Cargo.toml has a version crates.io doesn't have yet, then tags it
+# vX.Y.Z. This repository receives snapshot commits on main, so every push is checked; most of them change nothing.
+# Authentication is crates.io trusted publishing (OIDC, rust-lang/crates-io-auth-action): no token is stored anywhere.
+# crates.io can't create a crate that way, so the first version is published by hand; until then this does nothing.
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.plan.outputs.version }}
+      publish: ${{ steps.plan.outputs.publish }}
+      tag: ${{ steps.plan.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Is this version new?
+        id: plan
+        run: |
+          set -euo pipefail
+          version=$(sed -nE '/^\[package\]/,/^\[/ s/^version = "(.*)"$/\1/p' Cargo.toml)
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || { echo "::error::Cargo.toml version '$version' isn't X.Y.Z"; exit 1; }
+          # crates.io refuses requests without a User-Agent that says who's asking.
+          ua="release workflow of github.com/$GITHUB_REPOSITORY"
+          crate=$(curl -sS -o /dev/null -w '%{http_code}' -A "$ua" https://crates.io/api/v1/crates/runomine)
+          release=$(curl -sS -o /dev/null -w '%{http_code}' -A "$ua" "https://crates.io/api/v1/crates/runomine/$version")
+          case "$crate/$release" in
+            404/*) publish=false
+                   echo "::notice title=runomine isn't on crates.io yet::Publish the first version by hand (cargo publish), then add this workflow as its trusted publisher on crates.io. Nothing to do until then." ;;
+            200/200) publish=false; echo "runomine $version is already on crates.io." ;;
+            200/404) publish=true; echo "runomine $version is new: publishing." ;;
+            *) echo "::error::crates.io answered $crate (crate) / $release (version); not guessing."; exit 1 ;;
+          esac
+          tag=false
+          if [ -z "$(git ls-remote --tags origin "refs/tags/v$version")" ] && { [ "$publish" = true ] || [ "$release" = 200 ]; }; then tag=true; fi
+          { echo "version=$version"; echo "publish=$publish"; echo "tag=$tag"; } >> "$GITHUB_OUTPUT"
+
+  test:
+    needs: plan
+    if: needs.plan.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test --locked --all-features
+
+  # The declared minimum Rust (rust-version = "1.85") builds every feature combination a user may pick.
+  msrv:
+    needs: plan
+    if: needs.plan.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@1.85
+      - name: cargo check, each feature combination
+        run: |
+          set -euo pipefail
+          for features in "" "tokio,rustls" "tokio,native-tls" "blocking,rustls" "blocking,native-tls" "blocking" \
+                          "tower,rustls" "axum,rustls" "actix-web,rustls" "axum,actix-web,blocking,rustls,native-tls"; do
+            echo "== --no-default-features --features '$features'"
+            cargo check --locked --lib --no-default-features --features "$features"
+          done
+          echo "== default"
+          cargo check --locked --lib
+          echo "== all features, all targets"
+          cargo check --locked --all-features --all-targets
+
+  publish:
+    needs: [plan, test, msrv]
+    if: needs.plan.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    environment: crates-io
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: rust-lang/crates-io-auth-action@v1
+        id: auth
+      - run: cargo publish --locked
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+
+  tag:
+    needs: [plan, publish]
+    # After a successful publish, or when crates.io already has the version (published by hand) but the tag is missing.
+    if: always() && needs.plan.outputs.tag == 'true' && (needs.publish.result == 'success' || (needs.publish.result == 'skipped' && needs.plan.outputs.publish == 'false'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Tag v${{ needs.plan.outputs.version }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/v$VERSION" -f sha="$GITHUB_SHA" --silent
