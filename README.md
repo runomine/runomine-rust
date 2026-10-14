@@ -274,8 +274,10 @@ that off with `trust_forwarded_host(false)` if nothing in front of your app sets
 
 - **The IP never leaves your server.** The library hashes it on your machine, with the user agent, the host and a
   salt derived from your token and today's date (UTC). Only the first 16 hex characters of that hash are sent.
-- No cookies, no storage, no fingerprinting. The hash changes every day and differs per site, so a person can't be
-  followed across days or sites.
+- No cookies, no storage. Nothing is read from the device beyond what every web request carries (IP and user agent),
+  and only to compute a hash that expires daily.
+- The hash changes every day and differs per site, so on its own it can't follow anyone across days or sites. If you send `user` (your own user id), runomine links that user's visits and purchases over time to attribute revenue:
+  that is no longer anonymous audience measurement, and it needs its own legal basis.
 - The user agent is sent so runomine can drop bots and group devices and browsers. runomine discards it after that.
 - `user` is only sent when you set it.
 - The library does no classification. Sources, bots, devices and countries-from-IP are all worked out by runomine.
