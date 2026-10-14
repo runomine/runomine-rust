@@ -11,7 +11,7 @@ in the background. Your app is never blocked, and runomine never causes an error
 
 ## Install
 
-From crates.io, once published:
+From crates.io:
 
 ```toml
 [dependencies]
